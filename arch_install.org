@@ -1,0 +1,26 @@
+#+TITLE: Arch Installation Quick Guide
+A custom guide for a quick arch installation with full encryption
+* Step 1: Set Keymap
+#+BEGIN_SRC bash
+# load-keys fr-latin1
+#+END_SRC
+
+* Step 2: Verify boot mode
+#+BEGIN_SRC bash
+# ls /sys/firmware/efi/efivars
+#+END_SRC
+If the command shows the directory without error, then the system is booted in UEFI mode. If the directory does not exist, the system may be booted in BIOS (or CSM) mode. If the system did not boot in the mode you desired, refer to your motherboard's manual.
+
+* Step 3: Verify internet
+#+BEGIN_SRC bash
+# ip link
+#+END_SRC
+
+* Step 4: Update the system clock
+#+BEGIN_SRC shell
+# timedatectl set-ntp true
+#+END_SRC
+To check the service status, use =timedatectl status=.
+
+* Step 5: Partition the disks
+Use =lsblk= or =fdisk -l= to identify disks and partition.
