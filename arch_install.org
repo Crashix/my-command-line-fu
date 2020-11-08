@@ -1,26 +1,189 @@
 #+TITLE: Arch Installation Quick Guide
-A custom guide for a quick arch installation with full encryption
+A short guide to install arch with full encryption
 * Step 1: Set Keymap
 #+BEGIN_SRC bash
-# load-keys fr-latin1
+\# load-keys fr-latin1
 #+END_SRC
 
 * Step 2: Verify boot mode
 #+BEGIN_SRC bash
-# ls /sys/firmware/efi/efivars
+\# ls /sys/firmware/efi/efivars
 #+END_SRC
 If the command shows the directory without error, then the system is booted in UEFI mode. If the directory does not exist, the system may be booted in BIOS (or CSM) mode. If the system did not boot in the mode you desired, refer to your motherboard's manual.
 
 * Step 3: Verify internet
 #+BEGIN_SRC bash
-# ip link
+\# ip link
 #+END_SRC
 
 * Step 4: Update the system clock
 #+BEGIN_SRC shell
-# timedatectl set-ntp true
+ \# timedatectl set-ntp true
 #+END_SRC
 To check the service status, use =timedatectl status=.
 
 * Step 5: Partition the disks
 Use =lsblk= or =fdisk -l= to identify disks and partition.
+** Create a partition table and partitions
+Start fdisk against your drive. In this example we are using =/dev/sda=:
+#+BEGIN_SRC bash
+\# fdisk /dev/sda
+#+END_SRC
+Type =m= for help.
+
+*** Create new table
+To create a new partition table and clear all current partition data type =o= at the prompt for a MBR partition table or =g= for a GUID Partition Table (GPT). Skip this step if the table you require has already been created.
+*** Create partitions
+Create a new partition with the =n= command.
+*** List partition types
+
+Press =l= to list available partition types.
+*** Change partition type
+
+Each partition is associated with a Type. Press =t= to change the type of a partition. The default, Linux filesystem, should be fine for most use.
+Make a partition bootable.
+
+You can make the partition bootable by typing =a=.
+*** *Important Step:* Write changes to disk
+
+Write the table to disk and exit via the =w= command.
+*** Repeat this procedure for each drives until you have the partitions you desire.
+** Encrypt partition
+*** Root partition
+#+BEGIN_SRC bash
+\# cryptsetup -y -v luksFormat </dev/sda2>
+\# cryptsetup luksOpen </dev/sda2> cryptroot
+\# mkfs.ext4 /dev/mapper/cryptroot
+\# mount /dev/mapper/cryptroot /mnt
+#+END_SRC
+*** Home/other partition
+**** Creating a keyfile
+A keyfile can be of arbitrary content and size.
+
+Here dd is used to generate a keyfile of 2048 random bytes, storing it in the file /etc/luks-keys/ultimate.key:
+=# dd bs=1 count=4096 if=/dev/random of=/etc/luks-keys/ultimate.key iflag=fullblock=
+
+To deny any access for other users than root:
+=# chmod 600 /etc/luks-keys/ultimate.key=
+**** Encrypt a partition with keyfile
+#+BEGIN_SRC bash
+\# cryptsetup luksFormat <device> </path/to/keyfile>
+#+END_SRC
+**** Crypttab (mounting at boot time with a keyfile)
+#+BEGIN_SRC bash
+/etc/crypttab
+---------------
+home-crypt    UUID=UUID-identifier    /etc/luks-keys/ultimate.key
+#+END_SRC
+**** Fstab
+#+BEGIN_SRC bash
+/etc/fstab
+-----------------
+/dev/mapper/home-crypt        /home   ext4        defaults        0       2
+#+END_SRC
+* Step 6: Format the partitions
+** Boot partition
+=# mkfs.fat -F32 /dev/sda1=
+** Root partition
+See /Step 5/: Encrypt root partition
+** Home partition
+=# mkfs.ext4 /dev/mapper/home-crypt=
+* Step 7: Mount the partitions
+** Boot partition
+#+BEGIN_SRC bash
+\# mkdir /mnt/boot
+\# mount /dev/sda1 /mnt/boot
+#+END_SRC
+** Home partition
+=# mount /dev/mapper/home-crypt /mnt/home=
+** Swap partition
+=# swapon /dev/swap_partition=
+* Step 8: Installation
+Use the =pacstrap(8)= script to install the base package, Linux kernel and firmware for common hardware:
+#+BEGIN_SRC bash
+\# pacstrap /mnt base linux linux-firmware
+#+END_SRC
+
+* Step 9: Configuring the system
+** Fstab
+Generate an fstab file (use -U or -L to define by UUID or labels, respectively):
+#+BEGIN_SRC bash
+\# genfstab -U /mnt >> /mnt/etc/fstab
+#+END_SRC
+** Chroot
+=# arch-chroot /mnt=
+** Time zone
+#+BEGIN_SRC bash
+\# ln -sf /usr/share/zoneinfo/Region/City /etc/localtime
+#+END_SRC
+Run hwclock(8) to generate /etc/adjtime:
+#+BEGIN_SRC bash
+\# hwclock --systohc
+#+END_SRC
+** Localization
+Edit =/etc/locale.gen= and uncomment =en_US.UTF-8 UTF-8= and other needed locales. Generate the locales by running:
+=# locale-gen=
+
+Create the =/etc/locale.conf= file, and set the LANG variable accordingly:
+=LANG=en_US.UTF-8=
+
+If you set the keyboard layout, make the changes persistent in =/etc/vconsole.conf=:
+=KEYMAP=fr-latin1=
+
+** Network configuration
+#+BEGIN_SRC bash
+/etc/hostname
+----------------
+myhostname
+#+END_SRC
+
+#+BEGIN_SRC bash
+/etc/hosts
+-----------------------------------------------
+127.0.0.1	localhost
+::1		localhost
+127.0.1.1	myhostname.localdomain	myhostname
+#+END_SRC
+
+
+** Configuring mkinitcpio
+Add the =keyboard=, =keymap= and =encrypt= hooks to mkinitcpio.conf. If the default US keymap is fine for you, you can omit the =keymap= hook.
+#+BEGIN_SRC bash
+/etc/mkinitcpio.conf
+--------------------
+HOOKS=(base udev autodetect keyboard keymap consolefont modconf block encrypt filesystems fsck)
+#+END_SRC
+** Root password
+Set the root password:
+=# passwd=
+** Grub Bootloader
+*** Installing
+#+BEGIN_SRC bash
+\# pacman -S grub efibootmgr dosfstools os-prober mtools
+\# mkdir /boot/EFI
+\# grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+#+END_SRC
+*** Configuring
+Edit =/etc/default/grub= and append your kernel options between the quotes in the =GRUB_CMDLINE_LINUX_DEFAULT= line:
+
+#+BEGIN_SRC bash
+GRUB_CMDLINE_LINUX_DEFAULT="keymap=fr cryptdevice=UUID=<device-UUID>:cryptroot root=/dev/mapper/cryptroot"
+#+END_SRC
+
+And then automatically re-generate the grub.cfg file with:
+
+#+BEGIN_SRC bash
+\# grub-mkconfig -o /boot/grub/grub.cfg
+#+END_SRC
+
+* Last Step: Reboot
+Exit the chroot environment by typing =exit=.
+
+Optionally manually unmount all the partitions with =umount -R /mnt=: this allows noticing any "busy" partitions, and finding the cause with fuser(1).
+
+Finally, restart the machine by typing =reboot=: any partitions still mounted will be automatically unmounted by systemd. Remember to remove the installation medium and then login into the new system with the root account.
+
+* Post-installation
+#+BEGIN_SRC bash
+\# pacman -S networkmanager vim git
+#+END_SRC
