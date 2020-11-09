@@ -167,7 +167,7 @@ Set the root password:
 Edit =/etc/default/grub= and append your kernel options between the quotes in the =GRUB_CMDLINE_LINUX_DEFAULT= line:
 
 #+BEGIN_SRC bash
-GRUB_CMDLINE_LINUX_DEFAULT="keymap=fr cryptdevice=UUID=<device-UUID>:cryptroot root=/dev/mapper/cryptroot"
+GRUB_CMDLINE_LINUX_DEFAULT="keymap=fr cryptdevice=UUID=<your-device-UUID>:cryptroot root=/dev/mapper/cryptroot"
 #+END_SRC
 
 And then automatically re-generate the grub.cfg file with:
@@ -184,6 +184,22 @@ Optionally manually unmount all the partitions with =umount -R /mnt=: this allow
 Finally, restart the machine by typing =reboot=: any partitions still mounted will be automatically unmounted by systemd. Remember to remove the installation medium and then login into the new system with the root account.
 
 * Post-installation
+** Users:
 #+BEGIN_SRC bash
-\# pacman -S networkmanager vim git
+\# useradd -m crashix
+\# passwd crashix
+\# usermod -aG wheel,video,audio,optical,storage crashix
+#+END_SRC
+** Packages:
+#+BEGIN_SRC bash
+\# pacman -S networkmanager vim git sudo
+#+END_SRC
+** Sudoers:
+Edit and uncomment the wheel group:
+#+BEGIN_SRC bash
+\# EDITOR=nano visudo
+#+END_SRC
+** Xorg:
+#+BEGIN_SRC bash
+sudo pacman -S xorg xorg-xinit lightdm lightdm-webkit2-greeter
 #+END_SRC
