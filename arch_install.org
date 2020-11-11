@@ -84,6 +84,8 @@ home-crypt    UUID=UUID-identifier    /etc/luks-keys/ultimate.key
 * Step 6: Format the partitions
 ** Boot partition
 =# mkfs.fat -F32 /dev/sda1=
+** Swap partition
+=# mkswap </dev/sda2>=
 ** Root partition
 See /Step 5/: Encrypt root partition
 ** Home partition
